@@ -1,9 +1,8 @@
+//! usage:
 //! cargo run -- .\testdata\wenquanyi_12pt.bdf --range "china"
 //!
 mod util;
 use util::conv_bdf;
-
-// mod wenquanyi_12pt;
 
 use clap::Parser;
 use std::{ffi::OsStr, fs, path::PathBuf};
