@@ -14,9 +14,12 @@ struct Args {
 
     #[clap(
         long,
-        help = "list of characters,defaultly export all glyphs in the bdf. e.g --range \"abc\" means only export a,b and c code's glyphs "
+        help = r#"export characters list,defaultly export all glyphs in the bdf. e.g --range "abc" means only export a,b and c code's glyphs. 
+if exist range and range-file options at the same time. merge them as final exporting glyphs scope"#
     )]
     range: Option<String>,
+    #[clap(long, help = "same as range option, but through file.")]
+    range_file: Option<PathBuf>,
 
     #[clap(
         short,
@@ -34,9 +37,31 @@ fn main() {
         return;
     }
 
-    let range = args.range;
+    let mut range_input: Option<String> = None;
+    let mut s = String::new();
 
-    if let Some((contents, left)) = conv_bdf(args.bdf_file.as_path(), range) {
+    if let Some(p) = args.range_file {
+        if p.is_file() {
+            let mut range_from_file = String::new();
+            for c in fs::read_to_string(p).expect("couldn't open BDF file").chars() {
+                if c == '\r' || c == '\n'  {
+                }else {
+                    range_from_file.push(c);
+                }
+            }
+            s = s + &range_from_file;
+        } else {
+            println!("input range file is not exist, ignore it:{:?}", p);
+        }
+    }
+    if let Some(ref s1) = args.range {
+        s += s1;
+    }
+    if s.len() > 0 {
+        let _ = range_input.replace(s);
+    }
+
+    if let Some((contents, left)) = conv_bdf(args.bdf_file.as_path(), range_input) {
         let mut ot: PathBuf = args.output;
 
         let rust_ext = OsStr::new("rs");
@@ -60,7 +85,7 @@ fn main() {
         if left.len() == 0 {
             println!("output rust glyphs file :{:?}", ot);
         } else {
-            println!("output rust glyphs file :{:?}, but missing: {}", ot , left );
+            println!("output rust glyphs file :{:?}, but missing: {}", ot, left);
         }
     } else {
         println!("can not find glyphs, no output");
