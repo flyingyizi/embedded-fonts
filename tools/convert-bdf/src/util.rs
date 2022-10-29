@@ -68,13 +68,35 @@ mod conv {
             replacement_character,
         };
 
-        if 0 == output.glyphs.len() {
+        let final_scope:HashSet<_> = chars_range_set.difference(&left_chars_range_set).map(|c| c.clone()) .collect();
+        let r_code = to_rust_code(&output, path, &charset_to_string(&final_scope));
+        if r_code.is_none() {
             return None;
         }
 
-        let glyphs = format!("{:?}", output.glyphs);
-        let data = format!("{:?}", output.data);
-        let file_stem = path.file_stem().unwrap().to_owned();
+        Some((r_code.unwrap(), charset_to_string(&left_chars_range_set)))
+    }
+
+    fn charset_to_string(set: &HashSet<char>) -> String {
+        let mut string = String::new();
+        for c in set {
+            string.push(c.clone())
+        }
+        string
+    }
+
+    fn to_rust_code(
+        mf: &MyBdfFont,
+        related_bdf_path: &Path,
+        code_scope: &String,
+    ) -> Option<String> {
+        if 0 == mf.glyphs.len() {
+            return None;
+        }
+
+        let glyphs = format!("{:?}", mf.glyphs);
+        let data = format!("{:?}", mf.data);
+        let file_stem = related_bdf_path.file_stem().unwrap().to_owned();
         let constant = format!(
             "FONT_{}",
             file_stem
@@ -88,7 +110,11 @@ mod conv {
         let o = format!(
             r#"
 // GENERATED CODE by convert-bdf in tools
-            
+//
+// it only output 3 parts: s_glyphs, s_data, and final {name}.
+// You maybe reorganize according to your needs. For example, put the s_data into eeprom, 
+// write you code that read it from eeprom, build a BdfFont instance with reference to {name} and delete {name}. 
+//
 pub use  unformatted::{name};
 #[rustfmt::skip]
 mod unformatted {{
@@ -97,37 +123,41 @@ mod unformatted {{
         prelude::*,
         primitives::Rectangle,
     }};
+
+    const s_glyphs:[BdfGlyph;{glyphs_count}] = {g};
+
+    /// maybe you want store it in special secion(e.g. .eeprom), you can use below attributes
+    /// ```no_run
+    /// #[no_mangle]
+    /// #[link_section = ".eeprom"]
+    /// ```
+    static S_DATA: [u8;{data_cout}] = {d};
     
-    /// include {glyphs_count} glyphs. characters: "{list}"
+    /// glyphs is [BdfGlyph;{glyphs_count}], data is [u8;{data_cout}]. 
+    /// glyphs code include: "{list}"
     /// orig bdf file is {bdffile} 
-    pub const  {name}: BdfFont = BdfFont{{
-        glyphs: &{g},
-        data : &{d},
+    pub static  {name}: BdfFont = BdfFont{{
+        glyphs: &s_glyphs,
+        data : &S_DATA,
         line_height: {height},
         replacement_character:{replace},
     }};
 }}    
 "#,
-            glyphs_count = output.glyphs.len(),
-            list = charset_to_string(&chars_range_set),
-            bdffile = path.to_str().unwrap(),
+            glyphs_count = mf.glyphs.len(),
+            data_cout = mf.data.len(),
+            list = code_scope,
+            bdffile = related_bdf_path.to_str().unwrap(),
             name = constant,
             g = glyphs,
             d = data,
-            height = output.line_height,
-            replace = output.replacement_character,
+            height = mf.line_height,
+            replace = mf.replacement_character,
         );
 
-        Some((o, charset_to_string(&left_chars_range_set)))
+        Some(o)
     }
 
-    fn charset_to_string(set: &HashSet<char>) -> String {
-        let mut string = String::new();
-        for c in set {
-            string.push(c.clone())
-        }
-        string
-    }
 
     fn bits_to_bytes(bits: &[bool]) -> Vec<u8> {
         bits.chunks(8)
