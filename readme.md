@@ -2,7 +2,9 @@
 
 althrough [embedded-graphics](https://github.com/embedded-graphics/embedded-graphics) defaultly support mono fonts. but is it not enough for other language, e.g. chinese, kerea, japan and so on.
 
-This project includes a small tool convert-bdf to split(optional) and convert the BDF file format into the internal data structure for text render by the [embedded-graphics](https://github.com/embedded-graphics/embedded-graphics) library. this work is based on  [embedded-graphic BDF utils](https://github.com/embedded-graphics/bdf).
+This project includes a small tool convert-bdf to split(optional) and convert the BDF file format into the internal data structure for text render by the [embedded-graphics](https://github.com/embedded-graphics/embedded-graphics) library. this work is based on  [embedded-graphic BDF utils](https://github.com/embedded-graphics/bdf). attention: below section also describe how to convert ttf/pcf to bdf.
+
+With this crate, you can only import the required glyphs into your project. For example, only 35 characters "中国欢迎China welcomes日本へようこそWelcome to Japan북한 환영Welcome North Korea" are introduced, which is very meaningful in MCUs with limited space, such as avr.
 
 convert-bdf result is rust code, the result can be merge to you rust crate to display text. usage please refer the examples.
 
