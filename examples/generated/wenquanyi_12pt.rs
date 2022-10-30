@@ -1,11 +1,10 @@
-
 // GENERATED CODE by convert-bdf in tools
 //
 // it only output 3 parts: s_glyphs, s_data, and final FONT_WENQUANYI_12PT.
-// You maybe reorganize according to your needs. For example, put the s_data into eeprom, 
-// write you code that read it from eeprom, build a BdfFont instance with reference to FONT_WENQUANYI_12PT and delete FONT_WENQUANYI_12PT. 
+// You maybe reorganize according to your needs. For example, put the s_data into eeprom,
+// write you code that read it from eeprom, build a BdfFont instance with reference to FONT_WENQUANYI_12PT and delete FONT_WENQUANYI_12PT.
 //
-pub use  unformatted::FONT_WENQUANYI_12PT;
+pub use unformatted::FONT_WENQUANYI_12PT;
 #[rustfmt::skip]
 mod unformatted {
     use embedded_fonts::{BdfGlyph,BdfFont};
@@ -32,4 +31,4 @@ mod unformatted {
         line_height: 16,
         replacement_character:0,
     };
-}    
+}

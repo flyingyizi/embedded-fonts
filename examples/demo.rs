@@ -23,7 +23,12 @@ fn main() -> Result<(), std::convert::Infallible> {
 
     Text::new("中国欢迎China welcomes", Point::new(5, 30), my_style).draw(&mut display)?;
     Text::new("북한 환영Welcome North Korea", Point::new(5, 60), my_style).draw(&mut display)?;
-    Text::new("日本へようこそWelcome to Japan", Point::new(5, 90), my_style).draw(&mut display)?;
+    Text::new(
+        "日本へようこそWelcome to Japan",
+        Point::new(5, 90),
+        my_style,
+    )
+    .draw(&mut display)?;
 
     let output_settings = OutputSettingsBuilder::new().scale(2).build();
     Window::new("BDF Font", &output_settings).show_static(&display);
