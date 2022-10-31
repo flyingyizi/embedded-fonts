@@ -116,6 +116,7 @@ mod conv {
 // write you code that read it from eeprom, build a BdfFont instance with reference to {name} and delete {name}. 
 //
 pub use  unformatted::{name};
+pub use unformatted::{LINE_HEIGHT, REPLACEMENT_CHARACTER, S_DATA_LEN, S_GLYPHS};
 #[rustfmt::skip]
 mod unformatted {{
     use embedded_fonts::{{BdfGlyph,BdfFont}};
@@ -124,23 +125,27 @@ mod unformatted {{
         primitives::Rectangle,
     }};
 
-    const s_glyphs:[BdfGlyph;{glyphs_count}] = {g};
+    pub const S_GLYPHS:[BdfGlyph;{glyphs_count}] = {g};
+
+    pub const S_DATA_LEN:usize = {data_cout};
+    pub const REPLACEMENT_CHARACTER:usize = {replace};
+    pub const LINE_HEIGHT:u32 = {height};
 
     /// maybe you want store it in special secion(e.g. .eeprom), you can use below attributes
     /// ```no_run
     /// #[no_mangle]
     /// #[link_section = ".eeprom"]
     /// ```
-    static S_DATA: [u8;{data_cout}] = {d};
+    static S_DATA: [u8;S_DATA_LEN] = {d};
     
-    /// glyphs is [BdfGlyph;{glyphs_count}], data is [u8;{data_cout}]. 
+    /// maybe you need comment it, use youself. e.g. store the data in eeprom, so you contruct youself.
     /// glyphs code include: "{list}"
     /// orig bdf file is {bdffile} 
     pub static  {name}: BdfFont = BdfFont{{
         glyphs: &s_glyphs,
         data : &S_DATA,
-        line_height: {height},
-        replacement_character:{replace},
+        line_height: LINE_HEIGHT,
+        replacement_character:REPLACEMENT_CHARACTER,
     }};
 }}    
 "#,
