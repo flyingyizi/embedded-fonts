@@ -111,12 +111,12 @@ mod conv {
             r#"
 // GENERATED CODE by convert-bdf in tools
 //
-// it only output 3 parts: s_glyphs, s_data, and final {name}.
+// it only generate 3 parts: S_GLYPHS, s_data, and final {name}.
 // You maybe reorganize according to your needs. For example, put the s_data into eeprom, 
-// write you code that read it from eeprom, build a BdfFont instance with reference to {name} and delete {name}. 
+// write your code reading them from eeprom, build a BdfFont instance with reference to {name}. 
 //
 pub use  unformatted::{name};
-pub use unformatted::{LINE_HEIGHT, REPLACEMENT_CHARACTER, S_DATA_LEN, S_GLYPHS};
+//pub use unformatted::{{LINE_HEIGHT, REPLACEMENT_CHARACTER, S_DATA_LEN, S_GLYPHS}};
 #[rustfmt::skip]
 mod unformatted {{
     use embedded_fonts::{{BdfGlyph,BdfFont}};
@@ -126,7 +126,6 @@ mod unformatted {{
     }};
 
     pub const S_GLYPHS:[BdfGlyph;{glyphs_count}] = {g};
-
     pub const S_DATA_LEN:usize = {data_cout};
     pub const REPLACEMENT_CHARACTER:usize = {replace};
     pub const LINE_HEIGHT:u32 = {height};
@@ -138,11 +137,11 @@ mod unformatted {{
     /// ```
     static S_DATA: [u8;S_DATA_LEN] = {d};
     
-    /// maybe you need comment it, use youself. e.g. store the data in eeprom, so you contruct youself.
+    /// maybe you comment it, but use youself. e.g. store the data in eeprom, read data from eeprom and you contruct by youself.
     /// glyphs code include: "{list}"
     /// orig bdf file is {bdffile} 
     pub static  {name}: BdfFont = BdfFont{{
-        glyphs: &s_glyphs,
+        glyphs: &S_GLYPHS,
         data : &S_DATA,
         line_height: LINE_HEIGHT,
         replacement_character:REPLACEMENT_CHARACTER,
