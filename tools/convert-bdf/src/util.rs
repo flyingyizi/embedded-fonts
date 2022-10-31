@@ -1,7 +1,7 @@
 pub use conv::conv_bdf;
 
 mod conv {
-    use embedded_fonts::{BdfFont as MyBdfFont, BdfGlyph as MyBdfGlyph};
+    use embedded_fonts::{BdfFont as MyBdfFont, BdfGlyph as MyBdfGlyph, GlyphRect};
     use embedded_graphics::{prelude::*, primitives::Rectangle};
     use std::{collections::hash_set::HashSet, convert::TryFrom, fs, path::Path};
 
@@ -9,6 +9,7 @@ mod conv {
     pub fn conv_bdf(
         path: &Path,
         characters: Option<String>,
+        to_serialize: bool,
     ) -> Option<(String, String /*left chars*/)> {
         // TODO: handle errors
         let bdf = fs::read(&path).expect("couldn't open BDF file");
@@ -49,6 +50,10 @@ mod conv {
                 data.extend_from_slice(&glyph_data);
             }
         }
+        let mut final_scope = String::new();
+        for i in &glyphs {
+            final_scope.push(i.character.clone());
+        }
 
         // TODO: try to use DEFAULT_CHAR
         let replacement_character = replacement_character.unwrap_or_default();
@@ -68,8 +73,12 @@ mod conv {
             replacement_character,
         };
 
-        let final_scope:HashSet<_> = chars_range_set.difference(&left_chars_range_set).map(|c| c.clone()) .collect();
-        let r_code = to_rust_code(&output, path, &charset_to_string(&final_scope));
+
+        let r_code = if to_serialize {
+            to_rust_code_serialize(&output, path, &final_scope)
+        } else {
+            to_rust_code(&output, path, &final_scope)
+        };
         if r_code.is_none() {
             return None;
         }
@@ -111,36 +120,31 @@ mod conv {
             r#"
 // GENERATED CODE by convert-bdf in tools
 //
-// it only generate 3 parts: S_GLYPHS, s_data, and final {name}.
-// You maybe reorganize according to your needs. For example, put the s_data into eeprom, 
-// write your code reading them from eeprom, build a BdfFont instance with reference to {name}. 
-//
 pub use  unformatted::{name};
-//pub use unformatted::{{LINE_HEIGHT, REPLACEMENT_CHARACTER, S_DATA_LEN, S_GLYPHS}};
 #[rustfmt::skip]
 mod unformatted {{
-    use embedded_fonts::{{BdfGlyph,BdfFont}};
+    use embedded_fonts::{{BdfGlyph,BdfFont,GlyphRect}};
     use embedded_graphics::{{
         prelude::*,
         primitives::Rectangle,
     }};
 
-    pub const S_GLYPHS:[BdfGlyph;{glyphs_count}] = {g};
-    pub const S_DATA_LEN:usize = {data_cout};
-    pub const REPLACEMENT_CHARACTER:usize = {replace};
-    pub const LINE_HEIGHT:u32 = {height};
+    const S_GLYPHS:[BdfGlyph;{glyphs_count}] = {g};
 
-    /// maybe you want store it in special secion(e.g. .eeprom), you can use below attributes
-    /// ```no_run
-    /// #[no_mangle]
-    /// #[link_section = ".eeprom"]
-    /// ```
-    static S_DATA: [u8;S_DATA_LEN] = {d};
+    const S_DATA_LEN:usize = {data_cout};
+    const REPLACEMENT_CHARACTER:usize = {replace};
+    const LINE_HEIGHT:u32 = {height};
+
+    const S_DATA: [u8;S_DATA_LEN] = {d};
     
-    /// maybe you comment it, but use youself. e.g. store the data in eeprom, read data from eeprom and you contruct by youself.
     /// glyphs code include: "{list}"
     /// orig bdf file is {bdffile} 
-    pub static  {name}: BdfFont = BdfFont{{
+    /// #example
+    /// ```no_run
+    ///    let my_style = BdfTextStyle::new(&{name}, Rgb888::BLUE);
+    ///    Text::new("display content", Point::new(5, 30), my_style).draw(&mut display)?;
+    /// ```
+    pub const  {name}: BdfFont = BdfFont{{
         glyphs: &S_GLYPHS,
         data : &S_DATA,
         line_height: LINE_HEIGHT,
@@ -161,7 +165,98 @@ mod unformatted {{
 
         Some(o)
     }
+    fn to_rust_code_serialize(
+        mf: &MyBdfFont,
+        related_bdf_path: &Path,
+        code_scope: &String,
+    ) -> Option<String> {
+        if 0 == mf.glyphs.len() {
+            return None;
+        }
+        //
+        let tt = bdfglyphs_to_cobs(mf.glyphs);
+        let cobs = format!("{:?}", tt.as_slice());
+        let cobs_len = tt.len();
 
+        let glyphs = format!("{:?}", mf.glyphs);
+        let data = format!("{:?}", mf.data);
+        let file_stem = related_bdf_path.file_stem().unwrap().to_owned();
+
+        // format!("{:?}", output)
+        let o = format!(
+            r#"
+//! GENERATED CODE by convert-bdf in tools
+//!
+//! you should construct instance like below and use it.
+//! # example
+//! ```no_run
+//! let mut glyphs_vec = Vec::<BdfGlyph>::new();
+//! // let mut temp_vec = Vec::<u8>::new();
+//! for i in 0..CHARACTERS_SCOPE_COUNT{{
+//!     if let Some(x)= glyphs_cobs_decode(&cobs/*you read from eeprom,it content should be same as S_GLYPHS_COBS*/,i){{
+//!         glyphs_vec.push(x);
+//!     }} else {{
+//!         assert_eq!(true, false);
+//!     }}
+//! }}
+//! //read data from eeprom, it content should be same as S_DATA
+//! let myfont: BdfFont = BdfFont{{
+//!     glyphs: glyphs_vec.as_slice(),
+//!     data : &data,
+//!     line_height: LINE_HEIGHT,
+//!     replacement_character:REPLACEMENT_CHARACTER,
+//! }};
+//! let my_style = BdfTextStyle::new(&myfont, Rgb888::BLUE);
+//! Text::new("display content", Point::new(5, 30), my_style).draw(&mut display)?;
+//! ```
+pub use unformatted::{{
+    CHARACTERS_SCOPE, CHARACTERS_SCOPE_COUNT, LINE_HEIGHT, REPLACEMENT_CHARACTER, S_DATA_LEN,
+    S_GLYPHS_COBS_LEN,
+}};
+#[rustfmt::skip]
+/// glyphs code include: "{list}"
+/// orig bdf file is {bdffile} 
+mod unformatted {{
+    use embedded_fonts::{{BdfGlyph,BdfFont,GlyphRect}};
+    use embedded_graphics::{{
+        prelude::*,
+        primitives::Rectangle,
+    }};
+
+    pub const S_DATA_LEN:usize = {data_cout};
+    pub const REPLACEMENT_CHARACTER:usize = {replace};
+    pub const LINE_HEIGHT:u32 = {height};
+    pub const S_GLYPHS_COBS_LEN:usize = {glyphs_cobs_count};
+
+    /// character's pos can used when you access or when decode S_GLYPHS_COBS
+    pub const CHARACTERS_SCOPE:&str = "{list}";
+    pub const CHARACTERS_SCOPE_COUNT:usize = {glyphs_count};
+
+    // after decode, the content should be same as below:
+    // const S_GLYPHS:[BdfGlyph;{glyphs_count}] = {g};
+    #[no_mangle]
+    #[link_section = ".eeprom"]
+    static S_GLYPHS_COBS:[u8;S_GLYPHS_COBS_LEN]={glyphs_cobs};
+
+    #[no_mangle]
+    #[link_section = ".eeprom"]
+    static S_DATA: [u8;S_DATA_LEN] = {d};
+}}    
+"#,
+            glyphs_count = mf.glyphs.len(),
+            data_cout = mf.data.len(),
+            list = code_scope,
+            bdffile = related_bdf_path.to_str().unwrap(),
+            g = glyphs,
+            d = data,
+            height = mf.line_height,
+            replace = mf.replacement_character,
+            glyphs_cobs = cobs,
+            glyphs_cobs_count = cobs_len,
+        );
+
+        Some(o)
+    }
 
     fn bits_to_bytes(bits: &[bool]) -> Vec<u8> {
         bits.chunks(8)
@@ -204,7 +299,7 @@ mod unformatted {{
                 data.push(glyph.pixel(x, y))
             }
         }
-
+        let bounding_box: GlyphRect = bounding_box.into();
         (
             data,
             MyBdfGlyph {
@@ -214,5 +309,16 @@ mod unformatted {{
                 start_index,
             },
         )
+    }
+
+    fn bdfglyphs_to_cobs(gs: &[MyBdfGlyph]) -> Vec<u8> {
+        let mut glyphs_vec = Vec::<u8>::new();
+        for i in gs {
+            let mut buf = [0; 24];
+            let cc = postcard::to_slice_cobs(i, &mut buf).unwrap();
+            glyphs_vec.extend_from_slice(cc);
+        }
+
+        glyphs_vec
     }
 }

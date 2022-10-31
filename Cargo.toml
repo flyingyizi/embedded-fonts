@@ -8,5 +8,8 @@ edition = "2021"
 [dependencies]
 embedded-graphics = "0.7.1"
 
+postcard = {version="*"}
+serde = {version = "*",default-features = false}
+
 [dev-dependencies]
 embedded-graphics-simulator = "0.3.0"

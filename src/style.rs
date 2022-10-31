@@ -1,4 +1,4 @@
-pub use mybdf::{BdfFont, BdfGlyph};
+pub use mybdf::{glyphs_cobs_decode, BdfFont, BdfGlyph, GlyphRect};
 pub use mystyle::BdfTextStyle;
 
 mod mystyle {
@@ -100,12 +100,14 @@ mod mystyle {
 }
 
 mod mybdf {
+    use core::{convert::From, hash::Hash};
     use embedded_graphics::{
         iterator::raw::RawDataSlice,
         pixelcolor::raw::{LittleEndian, RawU1},
         prelude::*,
         primitives::Rectangle,
     };
+    use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct BdfFont<'a> {
@@ -124,10 +126,11 @@ mod mybdf {
         }
     }
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
     pub struct BdfGlyph {
         pub character: char,
-        pub bounding_box: Rectangle,
+        /// notes: not use embedded_graphics::primitives::Rectangle. becuase want to cooperation with serde
+        pub bounding_box: GlyphRect,
         pub device_width: u32,
         pub start_index: usize,
     }
@@ -146,13 +149,84 @@ mod mybdf {
                 data_iter.nth(self.start_index - 1);
             }
 
-            self.bounding_box
-                .translate(position)
+            let bx: Rectangle = self.bounding_box.into();
+
+            bx.translate(position)
                 .points()
                 .zip(data_iter)
                 .filter(|(_p, c)| *c == RawU1::new(1))
                 .map(|(p, _c)| Pixel(p, color))
                 .draw(target)
         }
+    }
+
+    /// outer used for serialize. its content is same as embedded_graphics::primitives::Rectangle
+    #[derive(
+        Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default, Deserialize, Serialize,
+    )]
+    pub struct GlyphRect {
+        /// Top left point(x,y) of the rectangle.
+        pub top_left: (i32 /*x*/, i32 /*y*/),
+        /// Size of the rectangle.
+        pub size: (u32 /*width*/, u32 /*height*/),
+    }
+    impl From<GlyphRect> for Rectangle {
+        fn from(o: GlyphRect) -> Self {
+            Rectangle {
+                top_left: Point::new(o.top_left.0, o.top_left.1),
+                size: Size::new(o.size.0, o.size.1),
+            }
+        }
+    }
+    impl From<Rectangle> for GlyphRect {
+        fn from(o: Rectangle) -> Self {
+            GlyphRect {
+                top_left: (o.top_left.x, o.top_left.y),
+                size: (o.size.width, o.size.height),
+            }
+        }
+    }
+
+    /// decode glyphs .
+    ///
+    pub fn glyphs_cobs_decode(cobs: &[u8], index: usize) -> Option<BdfGlyph> {
+        let mut previous: usize = 0;
+
+        // scope
+        let mut r_s: usize = 0;
+        let mut r_e: usize = 0;
+
+        let mut c_acc: usize = 0; // recored char index
+        let mut acc: usize = 0;   // record cob index
+        for i in cobs {
+            if *i == 0 {
+                if acc == index {
+                    r_s = previous;
+                    r_e = c_acc + 1;
+                    break;
+                }
+                previous = c_acc + 1;
+                acc += 1;
+            }
+            c_acc += 1;
+        }
+
+        if r_e == 0 {
+            return None;
+        }
+
+        let cobs = &cobs[r_s..r_e];
+
+        let mut temp_vec = [0_u8;24];
+        let mut j:usize=0;
+        for i in cobs{
+            temp_vec[j]=i.clone();
+            j +=1;
+        }
+        if let Ok(x) = postcard::from_bytes_cobs(&mut temp_vec) {
+            return Some(x);
+        }
+
+        None
     }
 }
