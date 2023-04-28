@@ -6,7 +6,52 @@ This project includes a small tool convert-bdf to split(optional) and convert th
 
 With this crate, you can only import the required glyphs into your project. For example, only 35 characters "中国欢迎China welcomes日本へようこそWelcome to Japan북한 환영Welcome North Korea" are introduced, which is very meaningful in MCUs with limited space, such as avr.
 
+# convert-bdf tool introduction
+
+tool convert-bdf to split(optional) and convert the BDF file format into the internal data structure for text render by the [embedded-graphics](https://github.com/embedded-graphics/embedded-graphics) library. 
+
 convert-bdf result is rust code, the result can be merge to you rust crate to display text. usage please refer the examples.
+
+## install/uninstall convert-bdf
+
+install binary convert-bdf through below command:
+```shell
+# install
+$ cargo install --path . --features build-binary
+
+#uninstall
+$ cargo install --list
+embedded-fonts v0.1.0 :
+    convert-bdf.exe
+  .....
+$ cargo uninstall -p embedded-fonts
+    Removing D:\prog\Scoop\persist\rustup\.cargo\bin\convert-bdf.exe
+
+#help information
+$ convert-bdf --help
+convert-bdf
+
+USAGE:
+    convert-bdf [OPTIONS] <BDF_FILE>
+
+ARGS:
+    <BDF_FILE>    BDF input
+
+OPTIONS:
+    -h, --help                       Print help information
+    -o, --output <OUTPUT>            output rust embedded glyphs [default: ./]
+        --range <RANGE>              list of characters,defaultly export all glyphs in the bdf. e.g
+                                     --range "abc" means only export a,b and c code's glyphs
+
+$convert-bdf  --range "中國zhongguo"  wenquanyi_12pt.bdf
+output rust glyphs file :"./wenquanyi_12pt.rs"
+```
+
+## BDF to rust-file conversion
+Use the tool convert-bdf (part of this project) to create a rust-file:
+```shell
+$ convert-bdf   --range "中国欢迎China welcomes日本へようこそWelcome to Japan북한 환영Welcome North Korea"   wenquanyi_12pt.bdf
+```
 
 # TTF (truetype font) conversion
 
@@ -34,10 +79,8 @@ $otf2bdf -p <pointsize> -r 75 -o <fontname>.bdf <fontname>.ttf
 The result can be checked with font tools, e.g.  `fontforge`.
 
 ## BDF to rust-file conversion
-Use the tool convert-bdf (part of this project) to create a rust-file:
-```shell
-convert-bdf   --range "中国欢迎China welcomes日本へようこそWelcome to Japan북한 환영Welcome North Korea"   wenquanyi_12pt.bdf
-```
+
+refer the tool convert-bdf (part of this project) introduction.
 
 ## Add font to a project
 
@@ -47,7 +90,7 @@ refer examples
 Fonts distributed in the .pcf or .pcf.gz file format are part of the X11 distribution. Steps are:
 
 - 1.Convert PCF to BDF (pcf2bdf)
-- 2.Convert BDF to the internal representation (`convert-bdf`)
+- 2.Convert BDF to the internal representation (through `convert-bdf`)
 
 pcf2bdf is often available as a software package on a linux system:
 
@@ -75,25 +118,7 @@ xfonts-wqy: /usr/share/fonts/X11/misc/wenquanyi_9pt.pcf
 $sudo apt-get install pcf2bdf
 $pcf2bdf -v -o wenquanyi_9pt.bdf  wenquanyi_9pt.pcf 
 
-$tools/convert-bdf --help
-convert-bdf
-
-USAGE:
-    convert-bdf [OPTIONS] <BDF_FILE>
-
-ARGS:
-    <BDF_FILE>    BDF input
-
-OPTIONS:
-    -h, --help                       Print help information
-    -o, --output <OUTPUT>            output rust embedded glyphs [default: ./]
-        --range <RANGE>              list of characters,defaultly export all glyphs in the bdf. e.g
-                                     --range "abc" means only export a,b and c code's glyphs
-
-$convert-bdf  --range "中國zhongguo"  wenquanyi_12pt.bdf
-output rust glyphs file :"./wenquanyi_12pt.rs"
 ```
-
 
 See the section for truetype conversion for further handling of the BDF file.
 
@@ -103,3 +128,10 @@ There are several tools available for the creation of new fonts:
 [gbdfed](http://www.math.nmsu.edu/~mleisher/Software/gbdfed/).
 [fontforge](http://fontforge.sourceforge.net/) Both tools can export to the BDF file format.
 
+## BDF to rust-file conversion
+
+refer the tool convert-bdf (part of this project) introduction.
+
+## Add font to a project
+
+refer examples
