@@ -17,15 +17,22 @@ convert-bdf result is rust code, the result can be merge to you rust crate to di
 install binary convert-bdf through below command:
 ```shell
 # install
-$ cargo install --path . --features build-binary
+#$ cargo install --path . --features build-binary
+$ cargo install --git https://github.com/flyingyizi/embedded-fonts --features build-binary                                          
+  Updating git repository `https://github.com/flyingyizi/embedded-fonts`                  
+  Installing embedded-fonts v0.1.0 (https://github.com/flyingyizi/embedded-fonts#ac02aec3)
+  ....
+  Installing D:\prog\Scoop\persist\rustup\.cargo\bin\convert-bdf.exe
+   Installed package `embedded-fonts v0.1.0 (https://github.com/flyingyizi/embedded-fonts#ac02aec3)` (executable `convert-bdf.exe`) 
 
 #uninstall
 $ cargo install --list
-embedded-fonts v0.1.0 :
+  ....
+embedded-fonts v0.1.0 (https://github.com/flyingyizi/embedded-fonts#ac02aec3):
     convert-bdf.exe
   .....
 $ cargo uninstall -p embedded-fonts
-    Removing D:\prog\Scoop\persist\rustup\.cargo\bin\convert-bdf.exe
+    Removing ~\.cargo\bin\convert-bdf.exe
 
 #help information
 $ convert-bdf --help
@@ -40,11 +47,23 @@ ARGS:
 OPTIONS:
     -h, --help                       Print help information
     -o, --output <OUTPUT>            output rust embedded glyphs [default: ./]
-        --range <RANGE>              list of characters,defaultly export all glyphs in the bdf. e.g
-                                     --range "abc" means only export a,b and c code's glyphs
+
+        --range <RANGE>              export characters list,defaultly export all glyphs in the bdf.
+                                     e.g --range "abc" means only export a,b and c code's glyphs.
+                                     if exist range and range-* options at the same time. merge them
+                                     as final exporting glyphs scope
+        --range-file <RANGE_FILE>    same as range option, but through characters file.
+        --range-path <RANGE_PATH>    same as range option, but through rust source directory. it
+                                     will colllect the first paraments of all Text::new stmts as the
+                                     characters list
 
 $convert-bdf  --range "中國zhongguo"  wenquanyi_12pt.bdf
 output rust glyphs file :"./wenquanyi_12pt.rs"
+
+$convert-bdf --range-path ./examples .\examples\testdata\wenquanyi_12pt.bdf
+output rust glyphs file :"./wenquanyi_12pt.rs"
+
+
 ```
 
 ## BDF to rust-file conversion

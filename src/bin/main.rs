@@ -14,16 +14,22 @@ struct Args {
     #[clap(
         long,
         help = r#"export characters list,defaultly export all glyphs in the bdf. e.g --range "abc" means only export a,b and c code's glyphs. 
-if exist range and range-file options at the same time. merge them as final exporting glyphs scope"#
+if exist range and range-* options at the same time. merge them as final exporting glyphs scope"#
     )]
     range: Option<String>,
-    #[clap(long, help = "same as range option, but through file.")]
+    #[clap(long, help = "same as range option, but through characters file.")]
     range_file: Option<PathBuf>,
+
+    #[clap(
+        long,
+        help = "same as range option, but through rust source directory. it will colllect the first paraments of all Text::new stmts as the characters list"
+    )]
+    range_path: Option<PathBuf>,
 
     #[clap(
         short,
         long,
-        help = "output path. if not exist \".rs\" extention, will look it as dirctory, and use the bdf file's stem as its stem",
+        help = "output path. if not exist \".rs\" extention in it, will look it as dirctory, and use the bdf file's stem as its stem",
         default_value = "./"
     )]
     output: PathBuf,
@@ -42,9 +48,11 @@ fn main() {
     if let Some(p) = args.range_file {
         if p.is_file() {
             let mut range_from_file = String::new();
-            for c in fs::read_to_string(p).expect("couldn't open BDF file").chars() {
-                if c == '\r' || c == '\n'  {
-                }else {
+            for c in fs::read_to_string(p)
+                .expect("couldn't open BDF file")
+                .chars()
+            {
+                if c != '\r' && c != '\n' {
                     range_from_file.push(c);
                 }
             }
@@ -53,6 +61,15 @@ fn main() {
             println!("input range file is not exist, ignore it:{:?}", p);
         }
     }
+    if let Some(p) = args.range_path {
+        if p.is_dir() {
+            let from_rust = collect_chars_from_ast::dump_total(p.as_path());
+            s = s + &from_rust;
+        } else {
+            println!("input range path is not directory, ignore it:{:?}", p);
+        }
+    }
+
     if let Some(ref s1) = args.range {
         s += s1;
     }
@@ -90,9 +107,6 @@ fn main() {
         println!("can not find glyphs, no output");
     }
 }
-
-
-
 
 mod conv {
     use embedded_fonts::{BdfFont as MyBdfFont, BdfGlyph as MyBdfGlyph};
@@ -162,7 +176,10 @@ mod conv {
             replacement_character,
         };
 
-        let final_scope:HashSet<_> = chars_range_set.difference(&left_chars_range_set).map(|c| c.clone()) .collect();
+        let final_scope: HashSet<_> = chars_range_set
+            .difference(&left_chars_range_set)
+            .map(|c| c.clone())
+            .collect();
         let r_code = to_rust_code(&output, path, &charset_to_string(&final_scope));
         if r_code.is_none() {
             return None;
@@ -252,7 +269,6 @@ mod unformatted {{
         Some(o)
     }
 
-
     fn bits_to_bytes(bits: &[bool]) -> Vec<u8> {
         bits.chunks(8)
             .map(|bits| {
@@ -307,8 +323,103 @@ mod unformatted {{
     }
 }
 
+/// helper to collect chars that inputed by Text::new
+mod collect_chars_from_ast {
+    use ignore::Walk;
+    use quote::ToTokens;
+    use std::{fs, path::Path};
+    use syn::visit::{self, Visit};
 
+    pub fn dump_total(path: &Path) -> String {
+        let mut total = String::new();
 
+        let walk = Walk::new(path)
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map(|e| e == "rs").unwrap_or(false))
+            .map(|e| e.into_path());
+
+        for path in walk {
+            let mut vis = TextNewVisitor::new();
+            let contents = fs::read_to_string(path).unwrap();
+            let ast = syn::parse_file(&contents).unwrap();
+            vis.visit_file(&ast);
+
+            let all = vis.get_allchars();
+            total.push_str(all.as_str());
+        }
+        total
+    }
+
+    /// to collect the Text::new's first param
+    struct TextNewVisitor {
+        pub chars: Vec<String>,
+    }
+    impl TextNewVisitor {
+        pub fn new() -> Self {
+            Self {
+                chars: Vec::<String>::new(),
+            }
+        }
+        /// collect all unique chars that is in the Text::new first param.
+        pub fn get_allchars(&self) -> String {
+            let mut result_set = std::collections::HashSet::new();
+            for s in &self.chars {
+                for c in s.chars() {
+                    result_set.insert(c);
+                }
+            }
+            let mut result = String::new();
+            for i in result_set {
+                result.push(i);
+            }
+            result
+            // println!("{:?}", result);
+        }
+
+        pub fn get_expr_path(p: &syn::Expr) -> Option<String> {
+            match p {
+                syn::Expr::Path(exprpath) => {
+                    let mut result = String::new();
+                    for seg in exprpath.path.segments.pairs() {
+                        let (a, b) = seg.into_tuple();
+                        result = result + a.ident.to_string().as_str();
+                        if let Some(b) = b {
+                            result = result + b.into_token_stream().to_string().as_str();
+                        }
+                    }
+                    return Some(result);
+                }
+                _ => {
+                    return None;
+                }
+            }
+        }
+
+        pub fn get_expr_lit(p: &syn::Expr) -> Option<String> {
+            match p {
+                syn::Expr::Lit(l) => {
+                    return Some(l.lit.to_token_stream().to_string());
+                }
+                _ => return None,
+            }
+        }
+    }
+
+    impl<'ast> Visit<'ast> for TextNewVisitor {
+        /// visit `pub const fn new(text: &'a str, position: Point, character_style: S) -> Self`
+        /// in embedded_graphics::text::text.
+        fn visit_expr_call(&mut self, i: &'ast syn::ExprCall) {
+            let name = String::from("Text::new");
+            if Some(name.clone()) == Self::get_expr_path(&i.func) {
+                let t = Self::get_expr_lit(&i.args[0]).unwrap();
+                self.chars.push(t);
+                // println!("Function with 123={}({:?})", name, t);
+            }
+
+            visit::visit_expr_call(self, i);
+        }
+    }
+}
 
 #[cfg(test)]
 mod test {

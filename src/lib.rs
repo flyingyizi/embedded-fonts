@@ -1,20 +1,17 @@
-#![no_std]
+// #![no_std]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(test, feature(test))]
 
 mod style;
 
 pub use style::*;
 
-// pub fn add(left: usize, right: usize) -> usize {
-//     left + right
-// }
-
 // #[cfg(test)]
 // mod tests {
+//     use std::path::Path;
+
 //     use super::*;
 
 //     #[test]
-//     fn it_works() {
-//         let result = add(2, 2);
-//         assert_eq!(result, 4);
-//     }
+//     fn it_works() {}
 // }
