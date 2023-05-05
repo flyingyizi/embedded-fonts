@@ -3,109 +3,162 @@
 //!
 pub use conv::conv_bdf;
 
-use clap::Parser;
+use clap::{Arg, ArgAction, Command};
 use std::{ffi::OsStr, fs, path::PathBuf};
 
-#[derive(clap::Parser)]
-struct Args {
-    #[clap(help = "BDF input")]
-    bdf_file: PathBuf,
-
-    #[clap(
-        long,
-        help = r#"export characters list,defaultly export all glyphs in the bdf. e.g --range "abc" means only export a,b and c code's glyphs. 
-if exist range and range-* options at the same time. merge them as final exporting glyphs scope"#
-    )]
-    range: Option<String>,
-    #[clap(long, help = "same as range option, but through characters file.")]
-    range_file: Option<PathBuf>,
-
-    #[clap(
-        long,
-        help = "same as range option, but through rust source directory. it will colllect the first paraments of all Text::new stmts as the characters list"
-    )]
-    range_path: Option<PathBuf>,
-
-    #[clap(
-        short,
-        long,
-        help = "output path. if not exist \".rs\" extention in it, will look it as dirctory, and use the bdf file's stem as its stem",
-        default_value = "./"
-    )]
-    output: PathBuf,
+fn main() {
+    let _ = run();
 }
 
-fn main() {
-    let args: Args = Args::parse();
-    if args.bdf_file.is_file() == false {
+fn run() -> Result<(), ()> {
+    let app = Command::new("convert-bdf")
+         .arg_required_else_help(true)
+        .about(
+r#"Generate embedded-graphic accepted Glyphs from bdf fonts file. 
+if exist multi range* options at the same time. merge them as final exporting glyphs scope"
+"#
+)
+        .arg(
+            Arg::new("input")
+                .long("bdffile")
+                .help("Input bdf file")
+                .short('i')
+                .value_parser(clap::value_parser!(PathBuf))
+                .required(true)
+                .action(ArgAction::Set)
+                .value_name("FILE"),
+        )
+        .arg(
+            Arg::new("output")
+                .long("output")
+                .help("output path. if not exist \".rs\" extention in it, will look it as dirctory, and use the bdf file's stem as its stem.")
+                .short('o')
+                .value_parser(clap::value_parser!(PathBuf))
+                .default_value("./")
+                .action(ArgAction::Set)
+                .value_name("PATH"),
+        )
+        .arg(
+            Arg::new("range")
+                .long("range")
+                .help(
+r#"export characters list,defaultly export all glyphs in the bdf. e.g --range "abc" means only export a,b and c code's glyphs. 
+"#
+                )
+                // .value_parser(clap::value_parser!(String))
+                .action(ArgAction::Append)
+                .value_name("RANGE"),
+        )
+        .arg(
+            Arg::new("range-file")
+                .long("range-file")
+                .help(
+                   r#"same as range option, but through characters file."#
+                )
+                .value_parser(clap::value_parser!(PathBuf))
+                .action(ArgAction::Append)
+                .value_name("RANGEFILE"),
+        )
+        .arg(
+            Arg::new("range-path")
+                .long("range-path")
+                .help(
+                   r#"same as range option, but through rust source directory. it will colllect the first paraments of all Text::new stmts as the input characters list"#
+                )
+                .value_parser(clap::value_parser!(PathBuf))
+                .action(ArgAction::Append)
+                .value_name("RANGEPATH"),
+        )
+        .version(env!("CARGO_PKG_VERSION"))
+        .author(env!("CARGO_PKG_AUTHORS"))
+        // .version(concat!(
+        //     env!("CARGO_PKG_VERSION"),
+        //     include_str!(concat!(env!("OUT_DIR"), "/commit-info.txt"))
+        // ))
+        ;
+
+    let matches = app.get_matches();
+
+    let bdf_file = matches.get_one::<PathBuf>("input").unwrap();
+    if bdf_file.is_file() == false {
         println!("bdf file not exist");
-        return;
+        return Err(());
     }
+
+    let mut output = matches.get_one::<PathBuf>("output").unwrap().clone();
 
     let mut range_input: Option<String> = None;
-    let mut s = String::new();
-
-    if let Some(p) = args.range_file {
-        if p.is_file() {
-            let mut range_from_file = String::new();
-            for c in fs::read_to_string(p)
-                .expect("couldn't open BDF file")
-                .chars()
-            {
-                if c != '\r' && c != '\n' {
-                    range_from_file.push(c);
+    {
+        let mut store = Vec::<char>::new();
+        if let Some(paths) = matches.get_many::<PathBuf>("range-file") {
+            for p in paths.collect::<Vec<_>>() {
+                if p.is_file() {
+                    for c in fs::read_to_string(p)
+                        .expect("couldn't open BDF file")
+                        .chars()
+                    {
+                        if c != '\r' && c != '\n' {
+                            store.push(c);
+                        }
+                    }
+                } else {
+                    println!("input range file is not exist, ignore it:{:?}", p);
                 }
             }
-            s = s + &range_from_file;
-        } else {
-            println!("input range file is not exist, ignore it:{:?}", p);
+        }
+        if let Some(paths) = matches.get_many::<PathBuf>("range-path") {
+            for p in paths.collect::<Vec<_>>() {
+                if p.is_dir() {
+                    let from_rust = collect_chars_from_ast::dump_total(p.as_path());
+                    store.extend(from_rust.chars());
+                } else {
+                    println!("input range path is not directory, ignore it:{:?}", p);
+                }
+            }
+        }
+        if let Some(ss) = matches.get_many::<String>("range") {
+            for p in ss.collect::<Vec<_>>() {
+                store.extend(p.chars());
+            }
+        }
+        if store.len() > 0 {
+            store.sort();
+            store.dedup();
+            range_input.replace(store.iter().collect::<String>());
         }
     }
-    if let Some(p) = args.range_path {
-        if p.is_dir() {
-            let from_rust = collect_chars_from_ast::dump_total(p.as_path());
-            s = s + &from_rust;
-        } else {
-            println!("input range path is not directory, ignore it:{:?}", p);
-        }
-    }
 
-    if let Some(ref s1) = args.range {
-        s += s1;
-    }
-    if s.len() > 0 {
-        let _ = range_input.replace(s);
-    }
-
-    if let Some((contents, left)) = conv_bdf(args.bdf_file.as_path(), range_input) {
-        let mut ot: PathBuf = args.output;
-
-        let rust_ext = OsStr::new("rs");
-        if Some(rust_ext) == ot.extension() {
+    if let Some((contents, left)) = conv_bdf(bdf_file.as_path(), range_input) {
+        if Some(OsStr::new("rs")) == output.extension() {
             // make sure directory exist. if not exist, create it
-            if let Some(parent) = ot.parent() {
+            if let Some(parent) = output.parent() {
                 if parent.is_dir() == false {
                     std::fs::create_dir_all(parent).expect("could'nt create not exist dir");
                 }
             }
         } else {
-            if ot.is_dir() == false {
-                std::fs::create_dir_all(ot.as_path()).expect("could'nt create not exist dir");
+            if output.is_dir() == false {
+                std::fs::create_dir_all(output.as_path()).expect("could'nt create not exist dir");
             }
-            ot = ot
-                .join(args.bdf_file.file_stem().unwrap())
+            output = output
+                .join(bdf_file.file_stem().unwrap())
                 .with_extension("rs");
         }
 
-        fs::write(&ot.as_path(), contents).expect("write output file fail");
+        fs::write(&output.as_path(), contents).expect("write output file fail");
         if left.len() == 0 {
-            println!("output rust glyphs file :{:?}", ot);
+            println!("output rust glyphs file :{:?}", output);
         } else {
-            println!("output rust glyphs file :{:?}, but missing: {}", ot, left);
+            println!(
+                "output rust glyphs file :{:?}, but missing: {}",
+                output, left
+            );
         }
     } else {
         println!("can not find glyphs, no output");
     }
+
+    Ok(())
 }
 
 mod conv {
