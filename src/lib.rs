@@ -1,6 +1,6 @@
-// #![no_std]
-#![cfg_attr(not(test), no_std)]
-#![cfg_attr(test, feature(test))]
+#![no_std]
+// #![cfg_attr(not(test), no_std)]
+// #![cfg_attr(test, feature(test))]
 
 mod style;
 
